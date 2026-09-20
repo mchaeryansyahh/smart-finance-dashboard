@@ -1,0 +1,5 @@
+<?php
+
+$TELEGRAM_BOT_TOKEN = getenv("TELEGRAM_BOT_TOKEN") ?: "8889626989:AAF9AgFvG9Xw4KO1w8tdfG0yIimdA7bA-9Q";
+
+?>
