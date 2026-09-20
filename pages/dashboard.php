@@ -37,6 +37,33 @@ $sql_pengeluaran = "
 $result_pengeluaran = $conn->query($sql_pengeluaran);
 $pengeluaran = $result_pengeluaran->fetch_assoc()["total"];
 
+$sql_bulan_lalu = "
+    SELECT
+        COALESCE(SUM(CASE WHEN jenis = 'Pemasukan' THEN nominal ELSE 0 END), 0) AS pemasukan,
+        COALESCE(SUM(CASE WHEN jenis = 'Pengeluaran' THEN nominal ELSE 0 END), 0) AS pengeluaran
+    FROM transactions
+    WHERE MONTH(tanggal) = MONTH(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
+    AND YEAR(tanggal) = YEAR(DATE_SUB(CURDATE(), INTERVAL 1 MONTH))
+";
+
+$result_bulan_lalu = $conn->query($sql_bulan_lalu);
+$bulan_lalu = $result_bulan_lalu ? $result_bulan_lalu->fetch_assoc() : [];
+$pemasukan_bulan_lalu = (float) ($bulan_lalu["pemasukan"] ?? 0);
+$pengeluaran_bulan_lalu = (float) ($bulan_lalu["pengeluaran"] ?? 0);
+
+$persen_pemasukan = $pemasukan_bulan_lalu > 0
+    ? (($pemasukan - $pemasukan_bulan_lalu) / $pemasukan_bulan_lalu) * 100
+    : ($pemasukan > 0 ? 100 : 0);
+
+$persen_pengeluaran = $pengeluaran_bulan_lalu > 0
+    ? (($pengeluaran - $pengeluaran_bulan_lalu) / $pengeluaran_bulan_lalu) * 100
+    : ($pengeluaran > 0 ? 100 : 0);
+
+$format_persen = static function (float $persen): string {
+    $nilai = number_format(abs($persen), 1, ',', '.');
+    return ($persen > 0 ? '+' : ($persen < 0 ? '-' : '')) . $nilai . '%';
+};
+
 
 /*
 |--------------------------------------------------------------------------
@@ -154,262 +181,169 @@ while ($row = $result_chart->fetch_assoc()) {
 
 <body>
 
-<div class="container">
+<div class="app-shell">
 
+    <aside class="sidebar">
 
-    <!-- HEADER -->
-
-    <div class="header">
-
-        <div>
-
-            <h1>Dashboard Keuangan</h1>
-
-            <p>
-                Masjid Al-Ikhlas — ringkasan
-                <?= date("F Y") ?>
-            </p>
-
+        <div class="brand">
+            <div class="brand-mark">M</div>
+            <div class="brand-info">
+                <strong>Masjid Al-Ikhlas</strong>
+                <span>Dashboard Keuangan</span>
+            </div>
         </div>
 
-        <a
-            href="transaksi.php"
-            class="btn"
-        >
-            + Tambah Transaksi
-        </a>
+        <nav class="nav">
+            <a href="#" class="nav-item active">
+                <span class="nav-icon">◫</span>
+                <span>Dashboard</span>
+            </a>
+            <a href="pemasukan.php" class="nav-item">
+                <span class="nav-icon">↗</span>
+                <span>Pemasukan</span>
+            </a>
+            <a href="pengeluaran.php" class="nav-item">
+                <span class="nav-icon">↘</span>
+                <span>Pengeluaran</span>
+            </a>
+            <a href="laporan.php" class="nav-item">
+                <span class="nav-icon">◌</span>
+                <span>Laporan</span>
+            </a>
+            <a href="pengaturan.php" class="nav-item">
+                <span class="nav-icon">⚑</span>
+                <span>Pengaturan</span>
+            </a>
+        </nav>
 
-    </div>
-
-
-    <!-- CARDS -->
-
-    <div class="cards">
-
-
-        <div class="card income">
-
-            <div class="card-title">
-                Pemasukan bulan ini
+        <div class="sidebar-footer">
+            <div class="avatar">A</div>
+            <div>
+                <strong>Admin</strong>
+                <span>Masjid Admin</span>
             </div>
-
-            <div class="card-value">
-                Rp <?= number_format(
-                    $pemasukan,
-                    0,
-                    ',',
-                    '.'
-                ) ?>
-            </div>
-
         </div>
 
+    </aside>
 
-        <div class="card expense">
+    <main class="content-panel">
 
-            <div class="card-title">
-                Pengeluaran bulan ini
+        <header class="topbar">
+
+            <div>
+                <p class="eyebrow">Dashboard Keuangan</p>
+                <h1>Dashboard</h1>
             </div>
 
-            <div class="card-value">
-                Rp <?= number_format(
-                    $pengeluaran,
-                    0,
-                    ',',
-                    '.'
-                ) ?>
+            <div class="header-buttons">
+                <a href="scan_nota.php" class="btn btn-ghost">Scan Nota</a>
+                <a href="transaksi.php" class="btn btn-primary">+ Tambah Transaksi</a>
             </div>
 
-        </div>
+        </header>
 
+        <section class="stats-grid">
 
-        <div class="card balance">
+            <article class="kpi-card income">
+                <div class="kpi-top">
+                    <span class="kpi-label">Pemasukan Bulan Ini</span>
+                    <span class="kpi-pill">↑</span>
+                </div>
+                <div class="kpi-value">Rp <?= number_format($pemasukan, 0, ',', '.') ?></div>
+                <div class="kpi-trend <?= $persen_pemasukan >= 0 ? "positive" : "negative" ?>">
+                    <?= $format_persen((float) $persen_pemasukan) ?> dari bulan lalu
+                </div>
+            </article>
 
-            <div class="card-title">
-                Saldo kas
+            <article class="kpi-card expense">
+                <div class="kpi-top">
+                    <span class="kpi-label">Pengeluaran Bulan Ini</span>
+                    <span class="kpi-pill">↓</span>
+                </div>
+                <div class="kpi-value">Rp <?= number_format($pengeluaran, 0, ',', '.') ?></div>
+                <div class="kpi-trend <?= $persen_pengeluaran <= 0 ? "positive" : "negative" ?>">
+                    <?= $format_persen((float) $persen_pengeluaran) ?> dari bulan lalu
+                </div>
+            </article>
+
+            <article class="kpi-card balance">
+                <div class="kpi-top">
+                    <span class="kpi-label">Saldo Kas</span>
+                    <span class="kpi-pill">◌</span>
+                </div>
+                <div class="kpi-value">Rp <?= number_format($saldo, 0, ',', '.') ?></div>
+                <div class="kpi-trend neutral">Tersedia saat ini</div>
+            </article>
+
+        </section>
+
+        <section class="ai-insight">
+            <?php include "ai_insight.php"; ?>
+        </section>
+
+        <section class="chart-panel section">
+            <div class="panel-header">
+                <h2>Tren Keuangan 6 Bulan</h2>
+                <span class="panel-meta">Apr - Sep 2025</span>
             </div>
 
-            <div class="card-value">
-                Rp <?= number_format(
-                    $saldo,
-                    0,
-                    ',',
-                    '.'
-                ) ?>
+            <div class="chart-legend">
+                <span class="legend-income"><span class="legend-dot"></span>Pemasukan</span>
+                <span class="legend-expense"><span class="legend-dot"></span>Pengeluaran</span>
             </div>
 
-        </div>
+            <div class="chart-container">
+                <?php foreach ($chart_data as $bulan => $data): ?>
+                    <?php
+                    $max_value = max($data["pemasukan"], $data["pengeluaran"], 1);
+                    $income_height = ($data["pemasukan"] / $max_value) * 170;
+                    $expense_height = ($data["pengeluaran"] / $max_value) * 170;
+                    $timestamp = strtotime($bulan . "-01");
+                    $nama_bulan = date("M", $timestamp);
+                    ?>
+                    <div class="chart-item">
+                        <div class="bar income-bar" style="height: <?= $income_height ?>px;" title="Pemasukan: Rp <?= number_format($data["pemasukan"], 0, ',', '.') ?>"></div>
+                        <div class="bar expense-bar" style="height: <?= $expense_height ?>px;" title="Pengeluaran: Rp <?= number_format($data["pengeluaran"], 0, ',', '.') ?>"></div>
+                        <span class="month-label"><?= $nama_bulan ?></span>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        </section>
 
-    </div>
-
-    <!-- GRAFIK 6 BULAN -->
-
-<div class="section">
-
-    <h2>Tren Keuangan 6 Bulan</h2>
-
-    <div class="chart-legend">
-
-        <span class="legend-income">
-            ● Pemasukan
-        </span>
-
-        <span class="legend-expense">
-            ● Pengeluaran
-        </span>
-
-    </div>
-
-
-    <div class="chart-container">
-
-        <?php foreach ($chart_data as $bulan => $data): ?>
-
-            <?php
-
-            $max_value = max(
-                $data["pemasukan"],
-                $data["pengeluaran"],
-                1
-            );
-
-            $income_height =
-                ($data["pemasukan"] / $max_value) * 200;
-
-            $expense_height =
-                ($data["pengeluaran"] / $max_value) * 200;
-
-            $timestamp = strtotime($bulan . "-01");
-
-            $nama_bulan = date("M", $timestamp);
-
-            ?>
-
-            <div class="chart-item">
-
-                <div
-                    class="bar income-bar"
-                    style="height: <?= $income_height ?>px;"
-                    title="Pemasukan: Rp <?= number_format(
-                        $data["pemasukan"],
-                        0,
-                        ",",
-                        "."
-                    ) ?>"
-                ></div>
-
-
-                <div
-                    class="bar expense-bar"
-                    style="height: <?= $expense_height ?>px;"
-                    title="Pengeluaran: Rp <?= number_format(
-                        $data["pengeluaran"],
-                        0,
-                        ",",
-                        "."
-                    ) ?>"
-                ></div>
-
-
-                <span class="month-label">
-
-                    <?= $nama_bulan ?>
-
-                </span>
-
+        <section class="table-panel section">
+            <div class="panel-header">
+                <h2>Transaksi Terbaru</h2>
+                <span class="panel-meta">23 transaksi</span>
             </div>
 
-        <?php endforeach; ?>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Tanggal</th>
+                            <th>Deskripsi</th>
+                            <th>Kategori</th>
+                            <th>Nominal</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <?php while ($row = $result_transaksi->fetch_assoc()): ?>
+                        <tr>
+                            <td><?= htmlspecialchars($row["tanggal"]) ?></td>
+                            <td><?= htmlspecialchars($row["deskripsi"]) ?></td>
+                            <td><span class="kategori-badge"><?= htmlspecialchars($row["kategori"]) ?></span></td>
+                            <td class="<?= $row["jenis"] === "Pemasukan" ? "income-text" : "expense-text" ?>">
+                                <?= $row["jenis"] === "Pemasukan" ? "+" : "-" ?>
+                                Rp <?= number_format($row["nominal"], 0, ',', '.') ?>
+                            </td>
+                        </tr>
+                    <?php endwhile; ?>
+                    </tbody>
+                </table>
+            </div>
+        </section>
 
-    </div>
-
-</div>
-
-
-    <!-- TRANSAKSI TERBARU -->
-
-    <div class="section">
-
-        <h2>Transaksi Terbaru</h2>
-
-        <table>
-
-            <thead>
-
-                <tr>
-
-                    <th>Tanggal</th>
-
-                    <th>Deskripsi</th>
-
-                    <th>Kategori</th>
-
-                    <th>Nominal</th>
-
-                </tr>
-
-            </thead>
-
-
-            <tbody>
-
-            <?php while (
-                $row = $result_transaksi->fetch_assoc()
-            ): ?>
-
-                <tr>
-
-                    <td>
-                        <?= htmlspecialchars(
-                            $row["tanggal"]
-                        ) ?>
-                    </td>
-
-
-                    <td>
-                        <?= htmlspecialchars(
-                            $row["deskripsi"]
-                        ) ?>
-                    </td>
-
-
-                    <td>
-                        <?= htmlspecialchars(
-                            $row["kategori"]
-                        ) ?>
-                    </td>
-
-
-                    <td class="<?=
-                        $row["jenis"] === "Pemasukan"
-                        ? "income-text"
-                        : "expense-text"
-                    ?>">
-
-                        <?= $row["jenis"] === "Pemasukan"
-                            ? "+"
-                            : "-"
-                        ?>
-
-                        Rp <?= number_format(
-                            $row["nominal"],
-                            0,
-                            ",",
-                            "."
-                        ) ?>
-
-                    </td>
-
-                </tr>
-
-            <?php endwhile; ?>
-
-            </tbody>
-
-        </table>
-
-    </div>
-
+    </main>
 
 </div>
 
